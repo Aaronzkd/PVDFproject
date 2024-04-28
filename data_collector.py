@@ -4,6 +4,7 @@ from std_msgs.msg import Int16MultiArray
 import csv
 import os
 from rclpy.qos import QoSProfile, ReliabilityPolicy
+from datetime import datetime, timedelta
 
 
 class DataCollector(Node):
@@ -24,31 +25,31 @@ class DataCollector(Node):
         self.sampling_rate = 44100  # set sampling rate
         self.samples_per_msg = 128  # number of sample per message
         self.init_csv_file()
+        self.start_time = self.get_clock().now()  # Record the start time
         
         # Create a timer that fires after 10 seconds to stop the node
         self.timer = self.create_timer(10, self.shutdown_callback)
-
-
+   
     def init_csv_file(self):
         # Create new file every time we ran, clear previous data
         with open(self.csv_file_path, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(['msg', 'time(second)'] + [f'data_{i}' for i in range(128)])  # set data size, the number of column
-
-
+            
     def listener_callback(self, msg):
         self.message_count += 1  # message counter
-        time_point = (self.message_count - 1) * self.samples_per_msg / self.sampling_rate  # calculate time
+        current_time = self.get_clock().now()
+        elapsed_time = current_time - self.start_time  # Get elapsed time from the start
+        elapsed_seconds = elapsed_time.nanoseconds / 1e9  # Convert nanoseconds to seconds
+
         # Map the incoming data from int16 values [-32768, 32767] to float values in mV
-        # normalized_data = [(x * 500.0 / 32768.0) for x in msg.data]
-        normalized_data = [(x * 0.01125) for x in msg.data]
+        normalized_data = [(x * 0.00425453) for x in msg.data]
         
         # Write data into CSV file
         with open(self.csv_file_path, mode='a', newline='') as file:
             writer = csv.writer(file)
-            # timestamp = self.get_clock().now().to_msg()
-            writer.writerow([self.message_count, time_point] + normalized_data)
-            # writer.writerow([self.message_count, time_point] + list(msg.data))  # write original data
+            writer.writerow([self.message_count, elapsed_seconds] + normalized_data)
+            # writer.writerow([self.message_count, time_point] + list(msg.data))  # write original data    
     
     def shutdown_callback(self):
         self.get_logger().info('Shutting down after 10 seconds.')
@@ -64,4 +65,3 @@ def main(args=None):
 
 if __name__ == '__main__':
     main()
-
